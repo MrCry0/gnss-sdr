@@ -107,6 +107,14 @@ private:
     unsigned int buffer_size_;
     unsigned int stream_timeout_ms_;
     bool streaming_;
+
+    // Diagnostic counters logged periodically from work(): batch size
+    // handed to us by the scheduler, and RX timeout occurrences.
+    uint64_t diag_call_count_;
+    uint64_t diag_noutput_sum_;
+    unsigned int diag_noutput_min_;
+    unsigned int diag_noutput_max_;
+    uint64_t diag_timeout_count_;
 };
 
 

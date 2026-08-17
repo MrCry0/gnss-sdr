@@ -26,6 +26,7 @@
 #include <bladeRF2.h>
 // clang-format on
 #include <algorithm>
+#include <climits>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -102,7 +103,12 @@ bladerf_source::bladerf_source(
           gr::io_signature::make(1, 1, sizeof(gr_complex))),
       buffer_size_(buffer_size),
       stream_timeout_ms_(stream_timeout_ms),
-      streaming_(false)
+      streaming_(false),
+      diag_call_count_(0),
+      diag_noutput_sum_(0),
+      diag_noutput_min_(UINT_MAX),
+      diag_noutput_max_(0),
+      diag_timeout_count_(0)
 {
     const std::string identifier = make_device_identifier(bladerf_args, device_serial);
 
@@ -242,6 +248,18 @@ int bladerf_source::work(int noutput_items,
     // sensitive to ordinary OS scheduling jitter on any request that missed
     // its real-time window.
     const auto num_samples = static_cast<unsigned int>(noutput_items);
+
+    diag_call_count_++;
+    diag_noutput_sum_ += num_samples;
+    diag_noutput_min_ = std::min(diag_noutput_min_, num_samples);
+    diag_noutput_max_ = std::max(diag_noutput_max_, num_samples);
+    if ((diag_call_count_ % 1000) == 0)
+        {
+            LOG(INFO) << "bladeRF: work() noutput_items stats over " << diag_call_count_
+                      << " calls: min=" << diag_noutput_min_ << " max=" << diag_noutput_max_
+                      << " mean=" << (diag_noutput_sum_ / diag_call_count_);
+        }
+
     if (raw_buffer_.size() < static_cast<size_t>(num_samples) * 2)
         {
             raw_buffer_.resize(static_cast<size_t>(num_samples) * 2);
@@ -254,6 +272,10 @@ int bladerf_source::work(int noutput_items,
     const int status = bladerf_sync_rx(dev_.get(), raw_buffer_.data(), num_samples, &meta, stream_timeout_ms_);
     if (status == BLADERF_ERR_TIMEOUT)
         {
+            diag_timeout_count_++;
+            LOG(WARNING) << "bladeRF: sync_rx TIMEOUT #" << diag_timeout_count_
+                         << " (requested " << num_samples << " samples, timeout "
+                         << stream_timeout_ms_ << " ms)";
             return 0;
         }
     if (status != 0)
