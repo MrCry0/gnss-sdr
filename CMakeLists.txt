@@ -339,6 +339,12 @@ if(UNIX)
     endif()
 endif()
 
+# rtklib.h's MAXOBS defaults to 64 simultaneous observations per epoch;
+# high-channel multi-constellation configs can exceed that and crash the
+# PVT solver. Overridable via its own #ifndef guard; set globally since
+# several targets include rtklib.h directly and must agree on the value.
+add_compile_definitions(MAXOBS=128)
+
 # Keep the legacy gnss-sdr/install layout when the build directory is under the
 # source tree, but avoid writing there for genuinely external build trees.
 file(RELATIVE_PATH _gnsssdr_binary_dir_relative_to_source
