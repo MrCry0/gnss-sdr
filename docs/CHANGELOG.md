@@ -16,6 +16,12 @@ All notable changes to GNSS-SDR will be documented in this file.
 
 ### Improvements in Accuracy:
 
+- The BeiDou DNAV (B1I, B3I) and GLONASS GNAV (L1, L2 C/A) telemetry decoders
+  now report the 180-degree carrier phase lock they detect from the sign of the
+  preamble (or time mark) in `Flag_PLL_180_deg_phase_locked`, and add half a
+  cycle to the carrier phase while it is set, as the GPS and Galileo telemetry
+  decoders already did. Before, they inverted the decoded symbols but left the
+  flag the tracking block had set.
 - Fixed the sign of the group-delay correction applied to GPS and QZSS L1+L2C
   dual-band observations in the SPP solver when a single-frequency ionospheric
   model is used: the L1 C/A pseudorange is now corrected as `P1 - c*TGD`, as
