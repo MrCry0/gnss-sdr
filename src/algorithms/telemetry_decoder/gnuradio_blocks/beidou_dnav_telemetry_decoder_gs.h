@@ -115,6 +115,7 @@ private:
     bool d_flag_SOW_set;     // Indicates when time of week is set
     bool d_flag_frame_sync;  // Indicate when a frame sync is achieved
     bool d_flag_preamble;    // Flag indicating when preamble was found
+    bool d_flag_PLL_180_deg_phase_locked;  // Preamble of the last decoded frame came inverted
 
     bool d_flag_valid_word;
     bool d_sent_tlm_failed_msg;
