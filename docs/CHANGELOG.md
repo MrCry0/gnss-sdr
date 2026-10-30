@@ -273,6 +273,15 @@ All notable changes to GNSS-SDR will be documented in this file.
   prompt correlator output of the code periods inside a symbol (for instance,
   each of the 20 periods of a GPS L1 C/A bit, or the secondary code chips of a
   BeiDou B1I symbol) is not stored. The record layout is the same in both cases.
+- A new tracking parameter `Tracking_XX.keep_phase_at_secondary_lock` (default
+  `false`) applies to the DLL/PLL tracking of signals tracked on a pilot with a
+  secondary code (`Tracking_XX.track_pilot=true`). Until the secondary code is
+  acquired, the carrier is tracked by a Costas loop, which may lock 180 degrees
+  off; the PLL that takes over then pulls the carrier by half a cycle to the
+  pilot's own polarity, so the prompt correlator output changes sign at that
+  point. With the parameter set to `true`, the PLL keeps the phase the Costas
+  loop held, and the remaining 180-degree ambiguity is left to the telemetry
+  decoder, as for signals without a pilot.
 
 See the definitions of concepts and metrics at
 https://gnss-sdr.org/design-forces/
