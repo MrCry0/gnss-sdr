@@ -89,6 +89,7 @@ public:
     bool dump{false};
     bool dump_mat{true};
     bool dump_every_code_period{false};
+    bool keep_phase_at_secondary_lock{false};
     bool tow_to_trk{false};
     bool bs_use_phase_dot_detector{true};
     // BeiDou B1C-specific options.
