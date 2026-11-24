@@ -382,6 +382,13 @@ All notable changes to GNSS-SDR will be documented in this file.
   prompt correlator output of the code periods inside a symbol (for instance,
   each of the 20 periods of a GPS L1 C/A bit, or the secondary code chips of a
   BeiDou B1I symbol) is not stored. The record layout is the same in both cases.
+- A new tracking parameter `Tracking_XX.dump_socket` (default empty) sends the
+  records of the DLL/PLL tracking dump to a Unix domain stream socket instead of
+  (or as well as) writing them to the file of `Tracking_XX.dump=true`. Each
+  tracking channel connects to the socket at the given path when it has its
+  first record, sends an 8-byte header (version, system, signal and channel) and
+  then the records, with the layout of the dump file. A reader that is slower
+  than the receiver makes it wait instead of losing records.
 - A new tracking parameter `Tracking_XX.keep_phase_at_secondary_lock` (default
   `false`) applies to the DLL/PLL tracking of signals tracked on a pilot with a
   secondary code (`Tracking_XX.track_pilot=true`). Until the secondary code is

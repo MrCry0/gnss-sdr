@@ -27,6 +27,7 @@
 #include "gnss_block_interface.h"
 #include "gnss_time.h"  // for timetags produced by File_Timestamp_Signal_Source
 #include "tow_to_trk.h"
+#include "tracking_dump_socket_sink.h"  // for Tracking_Dump_Socket_Sink
 #include "tracking_FLL_PLL_filter.h"  // for PLL/FLL filter
 #include "tracking_loop_filter.h"     // for DLL filter
 #include <boost/circular_buffer.hpp>
@@ -38,6 +39,7 @@
 #include <cstddef>                            // for size_t
 #include <cstdint>                            // for int32_t
 #include <fstream>                            // for ofstream
+#include <memory>                              // for unique_ptr
 #include <string>                             // for string
 #include <typeinfo>                           // for typeid
 #include <utility>                            // for pair
@@ -193,6 +195,7 @@ private:
     std::string d_dump_filename;
 
     std::ofstream d_dump_file;
+    std::unique_ptr<Tracking_Dump_Socket_Sink> d_dump_socket;
 
     // uint64_t d_sample_counter;
     uint64_t d_acq_sample_stamp;
@@ -254,6 +257,7 @@ private:
     bool d_secondary;
     bool d_dump;
     bool d_dump_mat;
+    bool d_dump_socket_failure_logged{false};
     bool d_acc_carrier_phase_initialized;
     bool d_enable_extended_integration;
     bool d_Flag_PLL_180_deg_phase_locked;

@@ -32,6 +32,7 @@ set(TRACKING_LIB_HEADERS
     lock_detectors.h
     tcp_communication.h
     tcp_packet_data.h
+    tracking_dump_socket_sink.h
     tracking_2nd_DLL_filter.h
     tracking_2nd_PLL_filter.h
     tracking_discriminators.h

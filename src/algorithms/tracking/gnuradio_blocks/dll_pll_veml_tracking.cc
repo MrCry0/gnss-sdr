@@ -69,6 +69,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>      // for fmod, round, floor
+#include <cstring>    // for memcpy
 #include <exception>  // for exception
 #include <iostream>   // for cout, cerr
 #include <map>
@@ -920,6 +921,12 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
                     std::cerr << "GNSS-SDR cannot create dump files for the tracking block. Wrong permissions?\n";
                     d_dump = false;
                 }
+        }
+    if (!d_trk_parameters.dump_socket.empty())
+        {
+            d_dump_socket = std::make_unique<Tracking_Dump_Socket_Sink>(d_trk_parameters.dump_socket,
+                d_trk_parameters.system,
+                d_trk_parameters.signal);
         }
     d_last_timetag_samplecounter = 0;
     d_timetag_waiting = false;
@@ -2013,9 +2020,9 @@ void dll_pll_veml_tracking::assign_correlators_to_synchro(Gnss_Synchro &synchro)
 
 void dll_pll_veml_tracking::log_data()
 {
-    if (d_dump)
+    if (d_dump || d_dump_socket)
         {
-            // Dump results to file
+            // Dump results to file and/or to the socket sink
             float prompt_I;
             float prompt_Q;
             float tmp_VE;
@@ -2053,70 +2060,97 @@ void dll_pll_veml_tracking::log_data()
             tmp_P = std::abs<float>(d_P_accu);
             tmp_L = std::abs<float>(d_L_accu);
 
-            try
+            // The record is built once and goes to the file, the socket, or both
+            std::array<char, Tracking_Dump_Socket_Sink::dump_record_size> record{};
+            size_t used = 0;
+            auto append = [&record, &used](const void *value, size_t size) {
+                if (used + size <= record.size())
+                    {
+                        std::memcpy(record.data() + used, value, size);
+                    }
+                used += size;
+            };
+            // Dump correlators output
+            append(&tmp_VE, sizeof(float));
+            append(&tmp_E, sizeof(float));
+            append(&tmp_P, sizeof(float));
+            append(&tmp_L, sizeof(float));
+            append(&tmp_VL, sizeof(float));
+            // PROMPT I and Q (to analyze navigation symbols)
+            append(&prompt_I, sizeof(float));
+            append(&prompt_Q, sizeof(float));
+            // PRN start sample stamp
+            tmp_long_int = this->nitems_read(0) + static_cast<uint64_t>(d_current_prn_length_samples);
+            append(&tmp_long_int, sizeof(uint64_t));
+            // accumulated carrier phase (double, since it grows without bound)
+            tmp_double = d_acc_carrier_phase_rad;
+            append(&tmp_double, sizeof(double));
+            // carrier and code frequency
+            tmp_float = static_cast<float>(d_carrier_doppler_hz);
+            append(&tmp_float, sizeof(float));
+            // carrier phase rate [Hz/s]
+            tmp_float = static_cast<float>(d_carrier_phase_rate_step_rad * d_trk_parameters.fs_in * d_trk_parameters.fs_in / TWO_PI);
+            append(&tmp_float, sizeof(float));
+            tmp_float = static_cast<float>(d_code_freq_chips);
+            append(&tmp_float, sizeof(float));
+            // code phase rate [chips/s^2]
+            tmp_float = static_cast<float>(d_code_phase_rate_step_chips * d_trk_parameters.fs_in * d_trk_parameters.fs_in);
+            append(&tmp_float, sizeof(float));
+            // PLL commands
+            tmp_float = static_cast<float>(d_carr_phase_error_hz);
+            append(&tmp_float, sizeof(float));
+            tmp_float = static_cast<float>(d_carr_error_filt_hz);
+            append(&tmp_float, sizeof(float));
+            // DLL commands
+            tmp_float = static_cast<float>(d_code_error_chips);
+            append(&tmp_float, sizeof(float));
+            tmp_float = static_cast<float>(d_code_error_filt_chips);
+            append(&tmp_float, sizeof(float));
+            // CN0 and carrier lock test
+            tmp_float = static_cast<float>(d_CN0_SNV_dB_Hz);
+            append(&tmp_float, sizeof(float));
+            tmp_float = static_cast<float>(d_carrier_lock_test);
+            append(&tmp_float, sizeof(float));
+            // AUX vars (for debug purposes)
+            tmp_float = static_cast<float>(d_rem_code_phase_samples);
+            append(&tmp_float, sizeof(float));
+            tmp_double = static_cast<double>(this->nitems_read(0) + d_current_prn_length_samples);
+            append(&tmp_double, sizeof(double));
+            // PRN
+            uint32_t prn_ = d_acquisition_gnss_synchro->PRN;
+            append(&prn_, sizeof(uint32_t));
+            // TOW
+            uint64_t tow_ = d_tow_from_telemetry_ms;
+            append(&tow_, sizeof(uint64_t));
+            // Week Number
+            uint32_t wn_ = d_wn_from_telemetry;
+            append(&wn_, sizeof(uint32_t));
+            if (used != record.size())
                 {
-                    // Dump correlators output
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_VE), sizeof(float));
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_E), sizeof(float));
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_P), sizeof(float));
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_L), sizeof(float));
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_VL), sizeof(float));
-                    // PROMPT I and Q (to analyze navigation symbols)
-                    d_dump_file.write(reinterpret_cast<char *>(&prompt_I), sizeof(float));
-                    d_dump_file.write(reinterpret_cast<char *>(&prompt_Q), sizeof(float));
-                    // PRN start sample stamp
-                    tmp_long_int = this->nitems_read(0) + static_cast<uint64_t>(d_current_prn_length_samples);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_long_int), sizeof(uint64_t));
-                    // accumulated carrier phase (double, since it grows without bound)
-                    tmp_double = d_acc_carrier_phase_rad;
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_double), sizeof(double));
-                    // carrier and code frequency
-                    tmp_float = static_cast<float>(d_carrier_doppler_hz);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    // carrier phase rate [Hz/s]
-                    tmp_float = static_cast<float>(d_carrier_phase_rate_step_rad * d_trk_parameters.fs_in * d_trk_parameters.fs_in / TWO_PI);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    tmp_float = static_cast<float>(d_code_freq_chips);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    // code phase rate [chips/s^2]
-                    tmp_float = static_cast<float>(d_code_phase_rate_step_chips * d_trk_parameters.fs_in * d_trk_parameters.fs_in);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    // PLL commands
-                    tmp_float = static_cast<float>(d_carr_phase_error_hz);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    tmp_float = static_cast<float>(d_carr_error_filt_hz);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    // DLL commands
-                    tmp_float = static_cast<float>(d_code_error_chips);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    tmp_float = static_cast<float>(d_code_error_filt_chips);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    // CN0 and carrier lock test
-                    tmp_float = static_cast<float>(d_CN0_SNV_dB_Hz);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    tmp_float = static_cast<float>(d_carrier_lock_test);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    // AUX vars (for debug purposes)
-                    tmp_float = static_cast<float>(d_rem_code_phase_samples);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_float), sizeof(float));
-                    tmp_double = static_cast<double>(this->nitems_read(0) + d_current_prn_length_samples);
-                    d_dump_file.write(reinterpret_cast<char *>(&tmp_double), sizeof(double));
-                    // PRN
-                    uint32_t prn_ = d_acquisition_gnss_synchro->PRN;
-                    d_dump_file.write(reinterpret_cast<char *>(&prn_), sizeof(uint32_t));
-                    // TOW
-                    uint64_t tow_ = d_tow_from_telemetry_ms;
-                    d_dump_file.write(reinterpret_cast<char *>(&tow_), sizeof(uint64_t));
-                    // Week Number
-                    uint32_t wn_ = d_wn_from_telemetry;
-                    d_dump_file.write(reinterpret_cast<char *>(&wn_), sizeof(uint32_t));
+                    LOG(WARNING) << "Tracking dump record has " << used << " bytes, expected " << record.size();
+                    return;
                 }
-            catch (const std::ofstream::failure &e)
+            if (d_dump)
                 {
-                    LOG(WARNING) << "Exception writing trk dump file " << e.what();
+                    try
+                        {
+                            d_dump_file.write(record.data(), record.size());
+                        }
+                    catch (const std::ofstream::failure &e)
+                        {
+                            LOG(WARNING) << "Exception writing trk dump file " << e.what();
+                        }
+                }
+            if (d_dump_socket && !d_dump_socket->send(d_channel, record.data()) && !d_dump_socket_failure_logged)
+                {
+                    d_dump_socket_failure_logged = true;
+                    LOG(WARNING) << "Channel " << d_channel << " cannot send the tracking dump to " << d_trk_parameters.dump_socket
+                                 << ": " << d_dump_socket->error_message();
                 }
         }
 }
+
+
 
 
 int32_t dll_pll_veml_tracking::save_matfile() const
